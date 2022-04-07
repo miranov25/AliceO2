@@ -20,7 +20,6 @@
 #include <iostream>
 #include "FairLogger.h"
 
-
 namespace o2::utils
 {
 
@@ -35,15 +34,15 @@ std::vector<std::string> listFiles(std::string const& dir, std::string const& se
 
   for (auto& p : std::filesystem::directory_iterator(dir)) {
     try {
-    	if (!p.is_directory()) {
-     		 auto fn = p.path().filename().string();
-      		if (regex_match(fn, str_expr)) {
-        	filenames.push_back(p.path().string());
-      	}
-    	}
-    }catch(...){
+      if (!p.is_directory()) {
+        auto fn = p.path().filename().string();
+        if (regex_match(fn, str_expr)) {
+          filenames.push_back(p.path().string());
+        }
+      }
+    } catch (...) {
       continue;
-   }
+    }
   }
   return filenames;
 }

@@ -71,7 +71,7 @@ void remove_tmp_files()
 {
   // remove all (known) socket files in /tmp
   // using the naming convention /tmp/o2sim-.*PID
-  //printf("remove_tmp_files\n");     
+  //printf("remove_tmp_files\n");
   LOG(info) << "remove_tmp_files: BEGIN ";
   std::stringstream searchstr;
   searchstr << "o2sim-.*-" << getpid() << "$";
@@ -79,11 +79,10 @@ void remove_tmp_files()
   // remove those files
   for (auto& fn : filenames) {
     continue;
-    try{
-    	std::filesystem::remove(std::filesystem::path(fn));
-    }
-    catch(...){
-        LOG(warn) << "Invalid file " << fn << " from /tmp ";
+    try {
+      std::filesystem::remove(std::filesystem::path(fn));
+    } catch (...) {
+      LOG(warn) << "Invalid file " << fn << " from /tmp ";
     }
   }
   LOG(info) << "remove_tmp_files: END ";
