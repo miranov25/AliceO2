@@ -206,11 +206,14 @@ class TPCTimeSeries : public Task
       indicesITSTPC[tracksITSTPC[i].getRefTPC().getIndex()] = {i, idxVtx};
     }
 
-    std::vector<std::tuple<int, float, float>> idxTPCTrackToTOFCluster; // store for each tpc track index the index to the TOF cluster
+    std::vector<std::tuple<int, float, float,o2::track::TrackLTIntegral,float>> idxTPCTrackToTOFCluster; // store for each tpc track index the index to the TOF cluster
 
     // get matches to TOF in case skimmed data is produced
     if (mUnbinnedWriter) {
-      idxTPCTrackToTOFCluster = std::vector<std::tuple<int, float, float>>(tracksTPC.size(), {-1, -999, -999});
+      //   getLTIntegralOut(), ///< L,TOF integral calculated during the propagation
+      //  getSignal()  mSignal = 0.0;              ///< TOF time in ps
+      o2::track::TrackLTIntegral defLT;
+      idxTPCTrackToTOFCluster = std::vector<std::tuple<int, float, float,o2::track::TrackLTIntegral,float>>(tracksTPC.size(), {-1, -999, -999,defLT,0});
       const std::vector<gsl::span<const o2::dataformats::MatchInfoTOF>> tofMatches{recoData.getTPCTOFMatches(), recoData.getTPCTRDTOFMatches(), recoData.getITSTPCTOFMatches(), recoData.getITSTPCTRDTOFMatches()};
 
       // loop over ITS-TPC-TRD-TOF and ITS-TPC-TOF tracks an store for each ITS-TPC track the TOF track index
@@ -218,7 +221,9 @@ class TPCTimeSeries : public Task
         for (const auto& tpctofmatch : tofMatch) {
           auto refTPC = recoData.getTPCContributorGID(tpctofmatch.getTrackRef());
           if (refTPC.isIndexSet()) {
-            idxTPCTrackToTOFCluster[refTPC] = {tpctofmatch.getIdxTOFCl(), tpctofmatch.getDXatTOF(), tpctofmatch.getDZatTOF()};
+            o2::track::TrackLTIntegral ltIntegral=tpctofmatch.getLTIntegralOut();
+            float signal=tpctofmatch.getSignal();
+            idxTPCTrackToTOFCluster[refTPC] = {tpctofmatch.getIdxTOFCl(), tpctofmatch.getDXatTOF(), tpctofmatch.getDZatTOF(),ltIntegral,signal};
           }
         }
       }
@@ -1049,7 +1054,7 @@ class TPCTimeSeries : public Task
     return isGoodTrack;
   }
 
-  void fillDCA(const gsl::span<const TrackTPC> tracksTPC, const gsl::span<const o2::dataformats::TrackTPCITS> tracksITSTPC, const gsl::span<const o2::dataformats::PrimaryVertex> vertices, const int iTrk, const int iThread, const std::unordered_map<unsigned int, std::array<int, 2>>& indicesITSTPC, const gsl::span<const o2::its::TrackITS> tracksITS, const std::vector<std::tuple<int, float, float>>& idxTPCTrackToTOFCluster, const gsl::span<const o2::tof::Cluster> tofClusters)
+  void fillDCA(const gsl::span<const TrackTPC> tracksTPC, const gsl::span<const o2::dataformats::TrackTPCITS> tracksITSTPC, const gsl::span<const o2::dataformats::PrimaryVertex> vertices, const int iTrk, const int iThread, const std::unordered_map<unsigned int, std::array<int, 2>>& indicesITSTPC, const gsl::span<const o2::its::TrackITS> tracksITS, const std::vector<std::tuple<int, float, float,o2::track::TrackLTIntegral,float>>& idxTPCTrackToTOFCluster, const gsl::span<const o2::tof::Cluster> tofClusters)
   {
     const auto& trackFull = tracksTPC[iTrk];
     const bool isGoodTrack = checkTrack(trackFull);
@@ -1432,6 +1437,8 @@ class TPCTimeSeries : public Task
                             << "tpcZDeltaAtTOF=" << tpcZDeltaAtTOF
                             << "mDXatTOF=" << std::get<1>(idxTPCTrackToTOFCluster[iTrk])
                             << "mDZatTOF=" << std::get<2>(idxTPCTrackToTOFCluster[iTrk])
+                            << "mTOFLength=" << std::get<3>(idxTPCTrackToTOFCluster[iTrk])
+                            << "mTOFSignal=" << std::get<4>(idxTPCTrackToTOFCluster[iTrk])
                             // TPC delta param
                             << "deltaTPCParamInOutTgl=" << deltaTPCParamInOutTgl
                             << "deltaTPCParamInOutQPt=" << deltaTPCParamInOutQPt
