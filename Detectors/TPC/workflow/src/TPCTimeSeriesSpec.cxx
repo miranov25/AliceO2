@@ -179,7 +179,6 @@ class TPCTimeSeries : public Task
     auto tracksITSTPC = mTPCOnly ? gsl::span<o2::dataformats::TrackTPCITS>() : recoData.getTPCITSTracks();
     auto tracksITS = mTPCOnly ? gsl::span<o2::its::TrackITS>() : recoData.getITSTracks();
 
-
     // getting the vertices
     auto vertices = mTPCOnly ? gsl::span<o2::dataformats::PrimaryVertex>() : recoData.getPrimaryVertices();
     auto primMatchedTracks = mTPCOnly ? gsl::span<o2::dataformats::VtxTrackIndex>() : recoData.getPrimaryVertexMatchedTracks();     // Global ID's for associated tracks
@@ -191,13 +190,13 @@ class TPCTimeSeries : public Task
       mBufferDCA.mOccupancyMapTPC.resize(mMaxOccupancyHistBins);
     }
     /// TRD tracklets
-    const auto & tracksTRD = mTPCOnly ? gsl::span<o2::trd::TrackTRD>() : recoData.getITSTPCTRDTracks<o2::trd::TrackTRD>();
-    const auto& trklets = mTPCOnly ? gsl::span<const o2::trd::Tracklet64>():recoData.getTRDTracklets();
+    const auto& tracksTRD = mTPCOnly ? gsl::span<o2::trd::TrackTRD>() : recoData.getITSTPCTRDTracks<o2::trd::TrackTRD>();
+    const auto& trklets = mTPCOnly ? gsl::span<const o2::trd::Tracklet64>() : recoData.getTRDTracklets();
     std::unordered_map<unsigned int, unsigned int> indicesTRDTPC; // TPC track index -> TRD-TPC track index.
     // loop over all TRD tracks and map them to TPC tracks
     for (int i = 0; i < tracksTRD.size(); ++i) {
-      //auto trackTPC = tracksTRD[i].getRefTPC().getIndex();
-      //if (trackTPC >= 0) indicesTRDTPC[trackTPC] = i;
+      // auto trackTPC = tracksTRD[i].getRefTPC().getIndex();
+      // if (trackTPC >= 0) indicesTRDTPC[trackTPC] = i;
     }
 
     // TOF clusters
@@ -493,7 +492,7 @@ class TPCTimeSeries : public Task
       auto myThread = [&](int iThread) {
         for (size_t i = iThread; i < loopEnd; i += mNThreads) {
           if (acceptTrack(tracksTPC[i])) {
-            fillDCA(tracksTPC, tracksITSTPC, vertices, i, iThread, indicesITSTPC, tracksITS, idxTPCTrackToTOFCluster, tofClusters, indicesTRDTPC,tracksTRD, trklets);
+            fillDCA(tracksTPC, tracksITSTPC, vertices, i, iThread, indicesITSTPC, tracksITS, idxTPCTrackToTOFCluster, tofClusters, indicesTRDTPC, tracksTRD, trklets);
           }
         }
       };
@@ -1130,7 +1129,7 @@ class TPCTimeSeries : public Task
   }
 
   void fillDCA(const gsl::span<const TrackTPC> tracksTPC, const gsl::span<const o2::dataformats::TrackTPCITS> tracksITSTPC, const gsl::span<const o2::dataformats::PrimaryVertex> vertices, const int iTrk, const int iThread, const std::unordered_map<unsigned int, std::array<int, 2>>& indicesITSTPC, const gsl::span<const o2::its::TrackITS> tracksITS, const std::vector<std::tuple<int, float, float, o2::track::TrackLTIntegral, double, float, unsigned int>>& idxTPCTrackToTOFCluster, const gsl::span<const o2::tof::Cluster> tofClusters,
-               const std::unordered_map<unsigned int,unsigned int> indicesTRDTPC,const gsl::span<const o2::trd::TrackTRD> tracksTRD,gsl::span<const o2::trd::Tracklet64> trackletsTRD)
+               const std::unordered_map<unsigned int, unsigned int> indicesTRDTPC, const gsl::span<const o2::trd::TrackTRD> tracksTRD, gsl::span<const o2::trd::Tracklet64> trackletsTRD)
   {
     const auto& trackFull = tracksTPC[iTrk];
     const bool isGoodTrack = checkTrack(trackFull);
