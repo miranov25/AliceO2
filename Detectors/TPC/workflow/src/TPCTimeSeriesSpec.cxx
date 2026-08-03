@@ -1179,20 +1179,20 @@ class TPCTimeSeries : public Task
       return;
     }
 
-    const int tglBin = std::clamp(static_cast<int>(mTglBins * std::abs(trackTmp.getTgl()) / mMaxTgl) + mPhiBins,
-                                  mPhiBins, mPhiBins + mTglBins - 1);
-    const int phiBin = std::clamp(static_cast<int>(mPhiBins * trackTmp.getPhi() / o2::constants::math::TwoPI),
-                                  0, mPhiBins - 1);
+    const int tglBin = mTglBins * std::abs(trackTmp.getTgl()) / mMaxTgl + mPhiBins;
+    const int phiBin = mPhiBins * trackTmp.getPhi() / o2::constants::math::TwoPI;
 
     const int offsQPtBin = mPhiBins + mTglBins;
-    const int qPtBin = std::clamp(offsQPtBin + static_cast<int>(mQPtBins * (trackTmp.getQ2Pt() + mMaxQPt) / (2 * mMaxQPt)),
-                                  offsQPtBin, offsQPtBin + mQPtBins - 1);
+    const int qPtBin = offsQPtBin + mQPtBins * (trackTmp.getQ2Pt() + mMaxQPt) / (2 * mMaxQPt);
     const int localMult = mNTracksWindow[iTrk];
 
     const int offsMult = offsQPtBin + mQPtBins;
-    const int multBin = std::clamp(offsMult + static_cast<int>(mMultBins * localMult / mMultMax),
-                                   offsMult, offsMult + mMultBins - 1);
+    const int multBin = offsMult + mMultBins * localMult / mMultMax;
     const int nBins = getNBins();
+
+    if ((phiBin < 0) || (phiBin > mPhiBins) || (tglBin < mPhiBins) || (tglBin > offsQPtBin) || (qPtBin < offsQPtBin) || (qPtBin > offsMult) || (multBin < offsMult) || (multBin > offsMult + mMultBins)) {
+      return;
+    }
 
     float sigmaY2 = 0;
     float sigmaZ2 = 0;
@@ -1354,6 +1354,10 @@ class TPCTimeSeries : public Task
         const float chi2match_ITSTPC = hasITSTPC ? tracksITSTPC[idxITSTPC.front()].getChi2Match() : -1;
         const int nClITS = idxITSCheck ? tracksITS[idxITSTrack].getNClusters() : -1;
         const int chi2ITS = idxITSCheck ? tracksITS[idxITSTrack].getChi2() : -1;
+        // D1: ITS cluster sizes (4-bit per layer, mask bit 28 = kSharedClusters)
+        const uint32_t itsClusterSizes = idxITSCheck ? (static_cast<uint32_t>(tracksITS[idxITSTrack].getClusterSizes()) & 0x0FFFFFFFu) : 0u;
+        const bool itsHasSharedClusters = idxITSCheck ? tracksITS[idxITSTrack].hasSharedClusters() : false;
+        const uint32_t itsPattern = idxITSCheck ? (tracksITS[idxITSTrack].getPattern() & 0x7Fu) : 0u;
         int typeSide = 2; // A- and C-Side cluster
         if (trackFull.hasASideClustersOnly()) {
           typeSide = 0;
@@ -1488,6 +1492,9 @@ class TPCTimeSeries : public Task
                             << "mX_ITS=" << mx_ITS
                             << "nClITS=" << nClITS
                             << "chi2ITS=" << chi2ITS
+                            << "itsClusterSizes=" << itsClusterSizes
+                            << "itsHasSharedClusters=" << itsHasSharedClusters
+                            << "itsPattern=" << itsPattern
                             << "chi2match_ITSTPC=" << chi2match_ITSTPC
                             << "PID=" << trkOrig.getPID().getID()
                             // TPC cov at vertex (without vertex constrained)
@@ -1680,6 +1687,7 @@ class TPCTimeSeries : public Task
 
     std::unordered_map<int, int> nContributors_ITS;    // ITS: vertex ID -> n contributors
     std::unordered_map<int, int> nContributors_ITSTPC; // ITS-TPC (and ITS-TPC-TRD, ITS-TPC-TOF, ITS-TPC-TRD-TOF): vertex ID -> n contributors
+    std::unordered_map<int, int> nContributors_TRD;    // ITS-TPC-TRD (and ITS-TPC-TRD-TOF): vertex ID -> n TRD-matched PV contributors
 
     // loop over collisions
     if (!vertices.empty()) {
@@ -1700,6 +1708,10 @@ class TPCTimeSeries : public Task
               if (refITSTPC.isIndexSet()) {
                 indicesITSTPC_vtx[refITSTPC] = vID;
                 ++nContributors_ITSTPC[vID];
+                // count TRD-matched PV contributors
+                if (source == TrkSrc::ITSTPCTRD || source == TrkSrc::ITSTPCTRDTOF) {
+                  ++nContributors_TRD[vID];
+                }
               } else {
                 ++nContributors_ITS[vID];
               }
@@ -1760,6 +1772,17 @@ class TPCTimeSeries : public Task
     mBufferDCA.vertexX_ITSTPC_RMS.front() = avgVtxITSTPC[0].getStdDev();
     mBufferDCA.vertexY_ITSTPC_RMS.front() = avgVtxITSTPC[1].getStdDev();
     mBufferDCA.vertexZ_ITSTPC_RMS.front() = avgVtxITSTPC[2].getStdDev();
+
+    // TRD matching fraction (summed over all vertices in this TF)
+    int sumITSTPCBased = 0;
+    int sumWithTRD = 0;
+    for (int ivtx = 0; ivtx < vertices.size(); ++ivtx) {
+      sumITSTPCBased += nContributors_ITSTPC[ivtx];
+      sumWithTRD += nContributors_TRD[ivtx];
+    }
+    mBufferDCA.nITSTPCBasedPVContributors.front() = sumITSTPCBased;
+    mBufferDCA.nITSTPCWithTRDPVContributors.front() = sumWithTRD;
+    mBufferDCA.fracTRD.front() = (sumITSTPCBased > 0) ? static_cast<float>(sumWithTRD) / sumITSTPCBased : std::nanf("");
 
     // quantiles and truncated mean
     RobustAverage avg(vertices.size(), false);
