@@ -1248,6 +1248,7 @@ class TPCTimeSeries : public Task
   std::vector<int> mNContributorsITS;                                      ///< per vertex ID: ITS-only PV contributors (current TF)
   std::vector<int> mNContributorsITSTPC;                                   ///< per vertex ID: ITS-TPC PV contributors, TRD/TOF-matched included (current TF)
   std::vector<int> mNContributorsTRD;                                      ///< per vertex ID: ITS-TPC-TRD (and -TOF) PV contributors (current TF)
+  std::vector<int> mNContributorsTOF;                                      ///< per vertex ID: ITS-TPC-TOF and ITS-TPC-TRD-TOF PV contributors (current TF)
   std::vector<std::mt19937> mGenerator;                                    ///< random generator for debug tree sampling
   std::vector<std::unique_ptr<o2::utils::TreeStreamRedirector>> mStreamer; ///< streamer for unbinned data
   float mXOuterMatching{60};                                               ///< reference x where delta track parameters for TPC with ITS-TPC track are stored in skimmed data
@@ -1343,6 +1344,7 @@ class TPCTimeSeries : public Task
     const int nContribITS = (vtxID >= 0 && vtxID < static_cast<int>(mNContributorsITS.size())) ? mNContributorsITS[vtxID] : -1;
     const int nContribITSTPC = (vtxID >= 0 && vtxID < static_cast<int>(mNContributorsITSTPC.size())) ? mNContributorsITSTPC[vtxID] : -1;
     const int nContribTRD = (vtxID >= 0 && vtxID < static_cast<int>(mNContributorsTRD.size())) ? mNContributorsTRD[vtxID] : -1;
+    const int nContribTOF = (vtxID >= 0 && vtxID < static_cast<int>(mNContributorsTOF.size())) ? mNContributorsTOF[vtxID] : -1;
 
     // calculate DCAz: (time TPC track - time vertex) * vDrift + sign_side * vertexZ
     const float signSide = trackFull.hasCSideClustersOnly() ? -1 : 1; // invert sign for C-side
@@ -1756,6 +1758,7 @@ class TPCTimeSeries : public Task
                             << "vertex_nContributorsITS=" << nContribITS
                             << "vertex_nContributorsITSTPC=" << nContribITSTPC
                             << "vertex_nContributorsTRD=" << nContribTRD
+                            << "vertex_nContributorsTOF=" << nContribTOF
                             << "trdTrigDBCBefore=" << trdTrigDBCBefore
                             << "trdTrigDBCAfter=" << trdTrigDBCAfter
                             // vertex BC (from its time, BC number from the TF start) and closest TRD triggers as BC differences to it
@@ -1990,6 +1993,7 @@ class TPCTimeSeries : public Task
     std::unordered_map<int, int> nContributors_ITS;    // ITS: vertex ID -> n contributors
     std::unordered_map<int, int> nContributors_ITSTPC; // ITS-TPC (and ITS-TPC-TRD, ITS-TPC-TOF, ITS-TPC-TRD-TOF): vertex ID -> n contributors
     std::unordered_map<int, int> nContributors_TRD;    // ITS-TPC-TRD (and ITS-TPC-TRD-TOF): vertex ID -> n TRD-matched PV contributors
+    std::unordered_map<int, int> nContributors_TOF;    // ITS-TPC-TOF and ITS-TPC-TRD-TOF: vertex ID -> n TOF-matched PV contributors
 
     // loop over collisions
     if (!vertices.empty()) {
@@ -2014,6 +2018,10 @@ class TPCTimeSeries : public Task
                 if (source == TrkSrc::ITSTPCTRD || source == TrkSrc::ITSTPCTRDTOF) {
                   ++nContributors_TRD[vID];
                 }
+                // count TOF-matched PV contributors (ITS-TPC-TRD-TOF is counted for both TRD and TOF)
+                if (source == TrkSrc::ITSTPCTOF || source == TrkSrc::ITSTPCTRDTOF) {
+                  ++nContributors_TOF[vID];
+                }
               } else {
                 ++nContributors_ITS[vID];
               }
@@ -2023,10 +2031,11 @@ class TPCTimeSeries : public Task
       }
     }
 
-    // per-vertex contributor counts, also written per entry of the unbinned tree (vertex_nContributorsITS/ITSTPC/TRD)
+    // per-vertex contributor counts, also written per entry of the unbinned tree (vertex_nContributorsITS/ITSTPC/TRD/TOF)
     mNContributorsITS.assign(vertices.size(), 0);
     mNContributorsITSTPC.assign(vertices.size(), 0);
     mNContributorsTRD.assign(vertices.size(), 0);
+    mNContributorsTOF.assign(vertices.size(), 0);
     const int nVertices = vertices.size();
     for (const auto& [vID, n] : nContributors_ITS) {
       if (vID >= 0 && vID < nVertices) {
@@ -2041,6 +2050,11 @@ class TPCTimeSeries : public Task
     for (const auto& [vID, n] : nContributors_TRD) {
       if (vID >= 0 && vID < nVertices) {
         mNContributorsTRD[vID] = n;
+      }
+    }
+    for (const auto& [vID, n] : nContributors_TOF) {
+      if (vID >= 0 && vID < nVertices) {
+        mNContributorsTOF[vID] = n;
       }
     }
 
